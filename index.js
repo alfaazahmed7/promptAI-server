@@ -5,7 +5,7 @@ const cors = require('cors');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 
 
-const port = process.env.port;
+const port = process.env.PORT;
 const uri = process.env.MONGODB_URI;
 
 const app = express();
@@ -23,7 +23,17 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        // await client.connect();
+        await client.connect();
+
+        const db = client.db('prompt-ai');
+        const promptCollections = db.collection('prompts');
+
+        // all-prompts related APIs
+
+        app.get('/api/prompts', async (req, res) => {
+            const result = await promptCollections.find().toArray();
+            res.json(result);
+        });
 
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
