@@ -27,15 +27,14 @@ async function run() {
 
         const db = client.db('prompt-ai');
         const promptCollections = db.collection('prompts');
+        const bookmarkCollections = db.collection('bookmarks');
 
         // all-prompts related APIs
 
         app.get('/api/prompts', async (req, res) => {
             try {
-                // 1. Extract query parameters from the request URL
                 const { search, category, aiTool, sort } = req.query;
 
-                // 2. Build a dynamic MongoDB query object
                 let query = {};
 
                 // Case-insensitive regex search for title or tags
@@ -56,7 +55,7 @@ async function run() {
                     query.aiTool = aiTool;
                 }
 
-                // 3. Build the MongoDB sorting object
+                // Build the MongoDB sorting object
                 let sortOption = {};
                 if (sort === 'popular') {
                     sortOption.copyCount = -1; // Highest copyCount first
@@ -66,7 +65,7 @@ async function run() {
                     sortOption._id = -1;       // Default: 'latest' (Newest first using MongoDB ObjectId timestamp)
                 }
 
-                // 4. Fetch the targeted records from MongoDB
+                // Fetch the targeted records from MongoDB
                 const result = await promptCollections
                     .find(query)
                     .sort(sortOption)
@@ -86,6 +85,45 @@ async function run() {
                 _id: new ObjectId(id)
             }
             const result = await promptCollections.findOne(query);
+            res.json(result);
+        });
+
+        // bookmark related APIs
+
+        app.post('/api/bookmarks', async (req, res) => {
+            const { userEmail, promptId } = req.body;
+
+            if (!userEmail || !promptId) {
+                return res.status(400).json({ error: "Missing identity or prompt tokens" });
+            }
+
+            // Setup the criteria object
+            const criteria = {
+                userEmail: userEmail,
+                promptId: new ObjectId(promptId)
+            };
+
+            // Check if this bookmark already exists in your collection
+            const existingBookmark = await bookmarkCollections.findOne(criteria);
+
+            if (existingBookmark) {
+                await bookmarkCollections.deleteOne({ _id: existingBookmark._id });
+                return res.json({ bookmarked: false, message: "Removed from collection" });
+            }
+            else {
+                await bookmarkCollections.insertOne({
+                    ...criteria,
+                    createdAt: new Date()
+                });
+                return res.json({ bookmarked: true, message: "Saved to your dashboard!" });
+            }
+        });
+
+        app.get('/api/bookmarks/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await bookmarkCollections.findOne({
+                promptId: new ObjectId(id)
+            });
             res.json(result);
         });
 
