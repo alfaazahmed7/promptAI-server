@@ -31,8 +31,53 @@ async function run() {
         // all-prompts related APIs
 
         app.get('/api/prompts', async (req, res) => {
-            const result = await promptCollections.find().toArray();
-            res.json(result);
+            try {
+                // 1. Extract query parameters from the request URL
+                const { search, category, aiTool, sort } = req.query;
+
+                // 2. Build a dynamic MongoDB query object
+                let query = {};
+
+                // Case-insensitive regex search for title or tags
+                if (search) {
+                    query.$or = [
+                        { title: { $regex: search, $options: 'i' } },
+                        { tags: { $regex: search, $options: 'i' } }
+                    ];
+                }
+
+                // Exact match filter for Category
+                if (category) {
+                    query.category = category;
+                }
+
+                // Exact match filter for AI Engine Tool
+                if (aiTool) {
+                    query.aiTool = aiTool;
+                }
+
+                // 3. Build the MongoDB sorting object
+                let sortOption = {};
+                if (sort === 'popular') {
+                    sortOption.copyCount = -1; // Highest copyCount first
+                } else if (sort === 'alphabetical') {
+                    sortOption.title = 1;     // Alphabetical order A-Z
+                } else {
+                    sortOption._id = -1;       // Default: 'latest' (Newest first using MongoDB ObjectId timestamp)
+                }
+
+                // 4. Fetch the targeted records from MongoDB
+                const result = await promptCollections
+                    .find(query)
+                    .sort(sortOption)
+                    .toArray();
+
+                res.json(result);
+            }
+            catch (error) {
+                console.error("Error fetching prompts:", error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
         });
 
         // await client.db("admin").command({ ping: 1 });
