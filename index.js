@@ -2,7 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 dotenv.config();
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 
 const port = process.env.PORT;
@@ -78,6 +78,15 @@ async function run() {
                 console.error("Error fetching prompts:", error);
                 res.status(500).json({ error: "Internal Server Error" });
             }
+        });
+
+        app.get('/api/prompts/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = {
+                _id: new ObjectId(id)
+            }
+            const result = await promptCollections.findOne(query);
+            res.json(result);
         });
 
         // await client.db("admin").command({ ping: 1 });
