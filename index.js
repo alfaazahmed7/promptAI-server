@@ -28,6 +28,7 @@ async function run() {
         const db = client.db('prompt-ai');
         const promptCollections = db.collection('prompts');
         const bookmarkCollections = db.collection('bookmarks');
+        const reportsCollection = db.collection('reports');
 
         // all-prompts related APIs
 
@@ -146,6 +147,25 @@ async function run() {
                 return res.status(404).json({ error: "Prompt document not found" });
             }
 
+            res.json(result);
+        });
+
+        // report related APIs
+
+        app.post('/api/report', async (req, res) => {
+            const { userEmail, promptId, reason, description } = req.body;
+
+            const criteria = {
+                userEmail: userEmail,
+                promptId: new ObjectId(promptId),
+                reason: reason,
+                description: description,
+            };
+
+            const result = await reportsCollection.insertOne({
+                ...criteria,
+                createdAt: new Date()
+            });
             res.json(result);
         });
 
