@@ -29,6 +29,7 @@ async function run() {
         const promptCollections = db.collection('prompts');
         const bookmarkCollections = db.collection('bookmarks');
         const reportsCollection = db.collection('reports');
+        const reviewsCollections = db.collection('reviews');
 
         // all-prompts related APIs
 
@@ -163,6 +164,25 @@ async function run() {
             };
 
             const result = await reportsCollection.insertOne({
+                ...criteria,
+                createdAt: new Date()
+            });
+            res.json(result);
+        });
+
+        // review related APIs
+
+        app.post('/api/review', async (req, res) => {
+            const { name, email, rating, comment, promptId } = req.body;
+
+            const criteria = {
+                email,
+                promptId: new ObjectId(promptId),
+                rating,
+                comment,
+            }
+
+            const result = await reviewsCollections.insertOne({
                 ...criteria,
                 createdAt: new Date()
             });
