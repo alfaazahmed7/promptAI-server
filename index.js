@@ -127,6 +127,28 @@ async function run() {
             res.json(result);
         });
 
+        // copy count related APIs
+
+        app.patch('/api/prompts/increment-copy', async (req, res) => {
+            const { promptId } = req.body;
+
+            if (!promptId) {
+                return res.status(400).json({ error: 'Missing required prompt identity token' });
+            }
+
+            const filter = { _id: new ObjectId(promptId) };
+            const updateDoc = {
+                $inc: { copyCount: 1 }
+            };
+
+            const result = await promptCollections.updateOne(filter, updateDoc);
+            if (result.matchedCount === 0) {
+                return res.status(404).json({ error: "Prompt document not found" });
+            }
+
+            res.json(result);
+        });
+
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
