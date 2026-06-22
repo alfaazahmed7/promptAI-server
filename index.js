@@ -30,6 +30,8 @@ async function run() {
         const bookmarkCollections = db.collection('bookmarks');
         const reportsCollection = db.collection('reports');
         const reviewsCollections = db.collection('reviews');
+        const subscriptionsCollection = db.collection('subscriptions');
+        const usersCollection = db.collection('user');
 
         // all-prompts related APIs
 
@@ -199,6 +201,24 @@ async function run() {
 
             const result = await reviewsCollections.find(query).toArray();
             res.json(result);
+        });
+
+        // subscription related APIs
+
+        app.post('/api/subscription', async (req, res) => {
+            const data = req.body;
+            const subsInfo = {
+                ...data,
+                createdAt: new Date()
+            }
+            const result = await subscriptionsCollection.insertOne(subsInfo);
+
+            // update the user plan info
+            const updateResult = await usersCollection.updateOne(
+                { email: data.email },
+                { $set: { plan: 'pro' } }
+            )
+            res.json(updateResult);
         });
 
         // await client.db("admin").command({ ping: 1 });
