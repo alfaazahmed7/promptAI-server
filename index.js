@@ -123,10 +123,17 @@ async function run() {
             }
         });
 
-        app.get('/api/bookmarks/:id', async (req, res) => {
+        app.get('/api/bookmark/:id', async (req, res) => {
             const id = req.params.id;
+            const userEmail = req.query.userEmail;
+
+            if (!userEmail) {
+                return res.json(null);
+            }
+
             const result = await bookmarkCollections.findOne({
-                promptId: new ObjectId(id)
+                promptId: new ObjectId(id),
+                userEmail: userEmail,
             });
             res.json(result);
         });
