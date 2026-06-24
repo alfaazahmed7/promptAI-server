@@ -33,6 +33,10 @@ async function run() {
         const subscriptionsCollection = db.collection('subscriptions');
         const usersCollection = db.collection('user');
 
+        // dashboard collection
+
+        const userAddPromptsCollection = db.collection('user-add-prompts');
+
         // all-prompts related APIs
 
         app.get('/api/prompts', async (req, res) => {
@@ -226,6 +230,21 @@ async function run() {
                 { $set: { plan: 'pro' } }
             )
             res.json(updateResult);
+        });
+
+        // dashboard related APIS
+        // user add prompt API
+
+        app.post('/api/user-add-prompt', async (req, res) => {
+            const promptData = req.body;
+
+            const promptInfo = {
+                ...promptData,
+                createdAt: new Date()
+            }
+
+            const result = await userAddPromptsCollection.insertOne(promptData);
+            res.json(result);
         });
 
         // await client.db("admin").command({ ping: 1 });
