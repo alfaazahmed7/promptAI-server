@@ -260,6 +260,19 @@ async function run() {
             res.json(result);
         });
 
+        // user added prompts APIs
+
+        app.patch('/api/user-edit-modal/:promptId', async (req, res) => {
+            const { promptId } = req.params;
+            const updateUserEditModal = req.body;
+
+            const result = await userAddPromptsCollection.updateOne(
+                { _id: new ObjectId(promptId) },
+                { $set: updateUserEditModal }
+            );
+            res.json(result);
+        });
+
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
