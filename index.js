@@ -247,6 +247,19 @@ async function run() {
             res.json(result);
         });
 
+        app.get('/api/user-add-prompts', async (req, res) => {
+            const { userEmail } = req.query;
+
+            const query = {};
+
+            if (userEmail) {
+                query.userEmail = userEmail;
+            }
+
+            const result = await userAddPromptsCollection.find(query).toArray();
+            res.json(result);
+        });
+
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
