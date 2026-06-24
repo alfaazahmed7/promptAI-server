@@ -273,6 +273,16 @@ async function run() {
             res.json(result);
         });
 
+        app.delete('/api/user-modal-delete/:promptId', async (req, res) => {
+            const { promptId } = req.params;
+
+            const result = await userAddPromptsCollection.deleteOne({
+                _id: new ObjectId(promptId),
+            });
+
+            res.json(result);
+        });
+
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
