@@ -235,6 +235,13 @@ async function run() {
             res.json(result);
         });
 
+        app.get('/api/reviews/:userEmail', async (req, res) => {
+            const { userEmail } = req.params;
+
+            const result = await reviewsCollections.find({ email: userEmail }).toArray();
+            res.json(result);
+        });
+
         // subscription related APIs
 
         app.post('/api/subscription', async (req, res) => {
