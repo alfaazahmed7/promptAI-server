@@ -96,6 +96,12 @@ async function run() {
             res.json(result);
         });
 
+        app.get('/api/prompts/user/:userEmail', async (req, res) => {
+            const { userEmail } = req.params;
+            const result = await userAddPromptsCollection.find({ userEmail: userEmail }).toArray();
+            res.json(result);
+        });
+
         // bookmark related APIs
 
         app.post('/api/bookmarks', async (req, res) => {
@@ -116,6 +122,13 @@ async function run() {
 
             if (existingBookmark) {
                 await bookmarkCollections.deleteOne({ _id: existingBookmark._id });
+
+                // decrease bookmark count in prompt
+                await promptCollections.updateOne(
+                    { _id: new ObjectId(promptId) },
+                    { $inc: { bookmarkCount: -1 } }
+                )
+
                 return res.json({ bookmarked: false, message: "Removed from collection" });
             }
             else {
@@ -123,6 +136,13 @@ async function run() {
                     ...criteria,
                     createdAt: new Date()
                 });
+
+                // increase bookmark count
+                await promptCollections.updateOne(
+                    { _id: new ObjectId(promptId) },
+                    { $inc: { bookmarkCount: 1 } }
+                );
+
                 return res.json({ bookmarked: true, message: "Saved to your dashboard!" });
             }
         });
