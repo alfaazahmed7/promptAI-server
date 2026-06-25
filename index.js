@@ -142,6 +142,27 @@ async function run() {
             res.json(result);
         });
 
+        app.get('/api/bookmarks/:userEmail', async (req, res) => {
+            const { userEmail } = req.params;
+
+            if (!userEmail) {
+                return res.json(null);
+            }
+
+            const result = await bookmarkCollections.find({ userEmail }).toArray();
+            res.json(result);
+        });
+
+        app.delete('/api/bookmark/:bookmarkId', async (req, res) => {
+            const { bookmarkId } = req.params;
+
+            const result = await bookmarkCollections.deleteOne({
+                _id: new ObjectId(bookmarkId)
+            });
+
+            res.json(result);
+        });
+
         // copy count related APIs
 
         app.patch('/api/prompts/increment-copy', async (req, res) => {
