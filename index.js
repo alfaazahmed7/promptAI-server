@@ -338,6 +338,23 @@ async function run() {
             res.json(result);
         });
 
+        app.patch('/api/admin/user', async (req, res) => {
+            const { userId, newRole } = req.body;
+
+            if (!userId || !newRole) {
+                return res.status(400).json({
+                    error: 'userId and newRole are required'
+                });
+            }
+
+            const result = await usersCollection.updateOne(
+                { _id: new ObjectId(userId) },
+                { $set: { role: newRole } }
+            );
+
+            res.json(result);
+        });
+
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
