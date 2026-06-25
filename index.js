@@ -331,6 +331,13 @@ async function run() {
             res.json(result);
         });
 
+        // users related APIs
+
+        app.get('/api/users', async (req, res) => {
+            const result = await usersCollection.find().toArray();
+            res.json(result);
+        });
+
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
