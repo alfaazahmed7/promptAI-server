@@ -355,6 +355,16 @@ async function run() {
             res.json(result);
         });
 
+        app.delete('/api/user/delete/:userId', async (req, res) => {
+            const { userId } = req.params;
+
+            const result = await usersCollection.deleteOne({
+                _id: new ObjectId(userId)
+            });
+
+            res.json(result);
+        });
+
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
@@ -372,9 +382,3 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
 });
-
-// query.promptId = new ObjectId(promptId);
-// query["promptId"] = new ObjectId(promptId);
-// {
-//   promptId: ObjectId("687a123abc456def789ghi01")
-// }
