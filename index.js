@@ -308,6 +308,11 @@ async function run() {
             res.json(result);
         });
 
+        app.get('/api/user-all-add-prompts', async (req, res) => {
+            const result = await userAddPromptsCollection.find().toArray();
+            res.json(result);
+        });
+
         // user added prompts APIs
 
         app.patch('/api/user-edit-modal/:promptId', async (req, res) => {
