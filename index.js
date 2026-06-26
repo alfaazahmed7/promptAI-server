@@ -205,7 +205,7 @@ async function run() {
             res.json(result);
         });
 
-        // report related APIs
+        // reports related APIs
 
         app.post('/api/report', async (req, res) => {
             const { userEmail, promptId, reason, description } = req.body;
@@ -221,6 +221,11 @@ async function run() {
                 ...criteria,
                 createdAt: new Date()
             });
+            res.json(result);
+        });
+
+        app.get('/api/get-all-reports', async (req, res) => {
+            const result = await reportsCollection.find().toArray();
             res.json(result);
         });
 
