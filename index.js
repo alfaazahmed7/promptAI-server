@@ -429,6 +429,49 @@ async function run() {
             });
         });
 
+        app.patch('/api/user-add-prompt-feature', async (req, res) => {
+            try {
+                const { promptId } = req.body;
+
+                if (!promptId) {
+                    return res.status(400).json({
+                        message: 'promptId is required'
+                    });
+                }
+
+                const prompt = await userAddPromptsCollection.findOne({
+                    _id: new ObjectId(promptId)
+                });
+
+                if (!prompt) {
+                    return res.status(404).json({
+                        message: 'Prompt not found'
+                    });
+                }
+
+                const newFeatureValue = !prompt.feature;
+
+                const result = await userAddPromptsCollection.updateOne(
+                    { _id: new ObjectId(promptId) },
+                    {
+                        $set: {
+                            feature: newFeatureValue
+                        }
+                    }
+                );
+
+                res.json({
+                    ...result,
+                    feature: newFeatureValue
+                });
+
+            } catch (error) {
+                res.status(500).json({
+                    message: error.message
+                });
+            }
+        });
+
         // users related APIs
 
         app.get('/api/users', async (req, res) => {
