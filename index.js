@@ -472,6 +472,22 @@ async function run() {
             }
         });
 
+        app.delete('/api/delete-user-add-prompt/:promptId', async (req, res) => {
+            const { promptId } = req.params;
+
+            if (!promptId) {
+                return res.status(400).json({
+                    message: 'promptId not found'
+                });
+            }
+
+            const result = await userAddPromptsCollection.deleteOne(
+                { _id: new ObjectId(promptId) }
+            );
+
+            res.json(result);
+        });
+
         // users related APIs
 
         app.get('/api/users', async (req, res) => {
