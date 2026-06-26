@@ -356,27 +356,76 @@ async function run() {
                 });
             }
 
-            // Update status
-            await userAddPromptsCollection.updateOne(
-                { _id: new ObjectId(promptId) },
-                { $set: { status: 'approved' } }
-            );
-
             // Remove old _id before inserting into another collection
             const { _id, ...promptData } = prompt;
 
             // Add fields needed by prompts collection
             const insertResult = await promptCollections.insertOne({
                 ...promptData,
+                sourcePromptId: prompt._id,
                 status: 'approved',
                 copyCount: 0,
                 bookmarkCount: 0,
                 approvedAt: new Date()
             });
 
+            // Update status and save the published prompt id
+            await userAddPromptsCollection.updateOne(
+                { _id: new ObjectId(promptId) },
+                {
+                    $set: {
+                        status: 'approved',
+                        publishedPromptId: insertResult.insertedId,
+                    }
+                }
+            );
+
             res.json({
                 success: true,
                 insertedId: insertResult.insertedId
+            });
+        });
+
+        app.patch('/api/user-add-prompt-rejection-status', async (req, res) => {
+            const { promptId, feedbackRemarks } = req.body;
+
+            if (!promptId || !feedbackRemarks) {
+                return res.status(400).json({
+                    message: 'Prompt ID and feedbackRemarks is required'
+                });
+            }
+
+            const prompt = await userAddPromptsCollection.findOne({
+                _id: new ObjectId(promptId)
+            });
+
+            if (!prompt) {
+                return res.status(404).json({
+                    message: 'Prompt not found'
+                });
+            }
+
+            // Update status
+            await userAddPromptsCollection.updateOne(
+                { _id: new ObjectId(promptId) },
+                {
+                    $set: {
+                        status: 'rejected',
+                        rejectionFeedback: feedbackRemarks
+                    }
+                }
+            );
+
+            // Delete published prompt if it exists
+            if (prompt.publishedPromptId) {
+                await promptCollections.deleteOne({
+                    _id: new ObjectId(prompt.publishedPromptId)
+                });
+            }
+
+            res.json({
+                success: true,
+                message: 'Prompt rejected successfully'
             });
         });
 
