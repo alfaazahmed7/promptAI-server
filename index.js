@@ -267,6 +267,11 @@ async function run() {
             res.json(result);
         });
 
+        app.get('/api/get-all-reviews', async (req, res) => {
+            const result = await reviewsCollections.find().toArray();
+            res.json(result);
+        });
+
         // subscription related APIs
 
         app.post('/api/subscription', async (req, res) => {
