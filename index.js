@@ -336,6 +336,50 @@ async function run() {
             res.json(result);
         });
 
+        app.patch('/api/update-user-add-prompt', async (req, res) => {
+            const { promptId } = req.body;
+
+            if (!promptId) {
+                return res.status(400).json({
+                    message: 'Prompt ID is required'
+                });
+            }
+
+            // Find the user-submitted prompt
+            const prompt = await userAddPromptsCollection.findOne({
+                _id: new ObjectId(promptId)
+            });
+
+            if (!prompt) {
+                return res.status(404).json({
+                    message: 'Prompt not found'
+                });
+            }
+
+            // Update status
+            await userAddPromptsCollection.updateOne(
+                { _id: new ObjectId(promptId) },
+                { $set: { status: 'approved' } }
+            );
+
+            // Remove old _id before inserting into another collection
+            const { _id, ...promptData } = prompt;
+
+            // Add fields needed by prompts collection
+            const insertResult = await promptCollections.insertOne({
+                ...promptData,
+                status: 'approved',
+                copyCount: 0,
+                bookmarkCount: 0,
+                approvedAt: new Date()
+            });
+
+            res.json({
+                success: true,
+                insertedId: insertResult.insertedId
+            });
+        });
+
         // users related APIs
 
         app.get('/api/users', async (req, res) => {
