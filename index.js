@@ -280,6 +280,11 @@ async function run() {
             res.json(updateResult);
         });
 
+        app.get('/api/all-subscriptions', async (req, res) => {
+            const result = await subscriptionsCollection.find().toArray();
+            res.json(result);
+        });
+
         // dashboard related APIS
         // user add prompt API
 
