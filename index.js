@@ -229,6 +229,38 @@ async function run() {
             res.json(result);
         });
 
+        app.patch('/api/warn-reported-prompt', async (req, res) => {
+            try {
+                const { reportId, promptId } = req.body;
+
+                if (!reportId || !promptId) {
+                    return res.status(400).json({
+                        message: 'reportId and promptId are required'
+                    });
+                }
+
+                const [promptResult, reportResult] = await Promise.all([
+                    promptCollections.updateOne(
+                        { _id: new ObjectId(promptId) },
+                        { $set: { adminReportFeedback: 'warning' } }
+                    ),
+                    reportsCollection.updateOne(
+                        { _id: new ObjectId(reportId) },
+                        { $set: { adminReportFeedback: 'warning' } }
+                    )
+                ]);
+
+                res.json({
+                    success: true,
+                });
+            } catch (error) {
+                res.status(500).json({
+                    success: false,
+                    message: error.message
+                });
+            }
+        });
+
         app.patch('/api/dismiss-report', async (req, res) => {
             try {
                 const { reportId, promptId } = req.body;
