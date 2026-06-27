@@ -102,6 +102,11 @@ async function run() {
             res.json(result);
         });
 
+        app.get('/api/all-prompts', async (req, res) => {
+            const result = await promptCollections.find().toArray();
+            res.json(result);
+        });
+
         // bookmark related APIs
 
         app.post('/api/bookmarks', async (req, res) => {
