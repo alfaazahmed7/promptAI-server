@@ -34,7 +34,6 @@ async function run() {
         const usersCollection = db.collection('user');
 
         // dashboard collection
-
         const userAddPromptsCollection = db.collection('user-add-prompts');
 
         // all-prompts related APIs
@@ -104,6 +103,14 @@ async function run() {
 
         app.get('/api/all-prompts', async (req, res) => {
             const result = await promptCollections.find().toArray();
+            res.json(result);
+        });
+
+        app.get('/api/featured-prompts', async (req, res) => {
+            const result = await promptCollections
+                .find({ featured: true })
+                .limit(6)
+                .toArray();
             res.json(result);
         });
 
@@ -370,7 +377,7 @@ async function run() {
             // update the user plan info
             const updateResult = await usersCollection.updateOne(
                 { email: data.email },
-                { $set: { plan: 'pro' } }
+                { $set: { plan: 'premium' } }
             )
             res.json(updateResult);
         });
