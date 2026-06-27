@@ -261,6 +261,22 @@ async function run() {
             }
         });
 
+        app.delete('/api/delete-report/:reportId', async (req, res) => {
+            const { reportId } = req.params;
+
+            if (!reportId) {
+                return res.status(400).json({
+                    message: 'report id is required'
+                });
+            }
+
+            const result = await reportsCollection.deleteOne({
+                _id: new ObjectId(reportId)
+            });
+
+            res.json(result);
+        });
+
         app.patch('/api/dismiss-report', async (req, res) => {
             try {
                 const { reportId, promptId } = req.body;
