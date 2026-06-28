@@ -21,622 +21,626 @@ const client = new MongoClient(uri, {
     }
 });
 
-async function run() {
+// async function run() {
+//     try {
+//         await client.connect();
+
+client.connect(() => {
+    console.log('Connecting to MongoDB');
+}).catch(console.dir);
+
+const db = client.db('prompt-ai');
+const promptCollections = db.collection('prompts');
+const bookmarkCollections = db.collection('bookmarks');
+const reportsCollection = db.collection('reports');
+const reviewsCollections = db.collection('reviews');
+const subscriptionsCollection = db.collection('subscriptions');
+const usersCollection = db.collection('user');
+
+// dashboard collection
+const userAddPromptsCollection = db.collection('user-add-prompts');
+
+// all-prompts related APIs
+
+app.get('/api/prompts', async (req, res) => {
     try {
-        await client.connect();
+        const { search, category, aiTool, sort } = req.query;
 
-        const db = client.db('prompt-ai');
-        const promptCollections = db.collection('prompts');
-        const bookmarkCollections = db.collection('bookmarks');
-        const reportsCollection = db.collection('reports');
-        const reviewsCollections = db.collection('reviews');
-        const subscriptionsCollection = db.collection('subscriptions');
-        const usersCollection = db.collection('user');
+        let query = {};
 
-        // dashboard collection
-        const userAddPromptsCollection = db.collection('user-add-prompts');
+        // Case-insensitive regex search for title or tags
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { tags: { $regex: search, $options: 'i' } }
+            ];
+        }
 
-        // all-prompts related APIs
+        // Exact match filter for Category
+        if (category) {
+            query.category = category;
+        }
 
-        app.get('/api/prompts', async (req, res) => {
-            try {
-                const { search, category, aiTool, sort } = req.query;
+        // Exact match filter for AI Engine Tool
+        if (aiTool) {
+            query.aiTool = aiTool;
+        }
 
-                let query = {};
+        // Build the MongoDB sorting object
+        let sortOption = {};
+        if (sort === 'popular') {
+            sortOption.copyCount = -1; // Highest copyCount first
+        } else if (sort === 'alphabetical') {
+            sortOption.title = 1;     // Alphabetical order A-Z
+        } else {
+            sortOption._id = -1;       // Default: 'latest' (Newest first using MongoDB ObjectId timestamp)
+        }
 
-                // Case-insensitive regex search for title or tags
-                if (search) {
-                    query.$or = [
-                        { title: { $regex: search, $options: 'i' } },
-                        { tags: { $regex: search, $options: 'i' } }
-                    ];
-                }
+        // Fetch the targeted records from MongoDB
+        const result = await promptCollections
+            .find(query)
+            .sort(sortOption)
+            .toArray();
 
-                // Exact match filter for Category
-                if (category) {
-                    query.category = category;
-                }
+        res.json(result);
+    }
+    catch (error) {
+        console.error("Error fetching prompts:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
 
-                // Exact match filter for AI Engine Tool
-                if (aiTool) {
-                    query.aiTool = aiTool;
-                }
+app.get('/api/prompts/:id', async (req, res) => {
+    const id = req.params.id;
+    const query = {
+        _id: new ObjectId(id)
+    }
+    const result = await promptCollections.findOne(query);
+    res.json(result);
+});
 
-                // Build the MongoDB sorting object
-                let sortOption = {};
-                if (sort === 'popular') {
-                    sortOption.copyCount = -1; // Highest copyCount first
-                } else if (sort === 'alphabetical') {
-                    sortOption.title = 1;     // Alphabetical order A-Z
-                } else {
-                    sortOption._id = -1;       // Default: 'latest' (Newest first using MongoDB ObjectId timestamp)
-                }
+app.get('/api/prompts/user/:userEmail', async (req, res) => {
+    const { userEmail } = req.params;
+    const result = await userAddPromptsCollection.find({ userEmail: userEmail }).toArray();
+    res.json(result);
+});
 
-                // Fetch the targeted records from MongoDB
-                const result = await promptCollections
-                    .find(query)
-                    .sort(sortOption)
-                    .toArray();
+app.get('/api/all-prompts', async (req, res) => {
+    const result = await promptCollections.find().toArray();
+    res.json(result);
+});
 
-                res.json(result);
-            }
-            catch (error) {
-                console.error("Error fetching prompts:", error);
-                res.status(500).json({ error: "Internal Server Error" });
-            }
+app.get('/api/featured-prompts', async (req, res) => {
+    const result = await promptCollections
+        .find({ featured: true })
+        .limit(6)
+        .toArray();
+    res.json(result);
+});
+
+// bookmark related APIs
+
+app.post('/api/bookmarks', async (req, res) => {
+    const { userEmail, promptId } = req.body;
+
+    if (!userEmail || !promptId) {
+        return res.status(400).json({ error: "Missing identity or prompt tokens" });
+    }
+
+    // Setup the criteria object
+    const criteria = {
+        userEmail: userEmail,
+        promptId: new ObjectId(promptId)
+    };
+
+    // Check if this bookmark already exists in your collection
+    const existingBookmark = await bookmarkCollections.findOne(criteria);
+
+    if (existingBookmark) {
+        await bookmarkCollections.deleteOne({ _id: existingBookmark._id });
+
+        // decrease bookmark count in prompt
+        await promptCollections.updateOne(
+            { _id: new ObjectId(promptId) },
+            { $inc: { bookmarkCount: -1 } }
+        )
+
+        return res.json({ bookmarked: false, message: "Removed from collection" });
+    }
+    else {
+        await bookmarkCollections.insertOne({
+            ...criteria,
+            createdAt: new Date()
         });
 
-        app.get('/api/prompts/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = {
-                _id: new ObjectId(id)
-            }
-            const result = await promptCollections.findOne(query);
-            res.json(result);
-        });
+        // increase bookmark count
+        await promptCollections.updateOne(
+            { _id: new ObjectId(promptId) },
+            { $inc: { bookmarkCount: 1 } }
+        );
 
-        app.get('/api/prompts/user/:userEmail', async (req, res) => {
-            const { userEmail } = req.params;
-            const result = await userAddPromptsCollection.find({ userEmail: userEmail }).toArray();
-            res.json(result);
-        });
+        return res.json({ bookmarked: true, message: "Saved to your dashboard!" });
+    }
+});
 
-        app.get('/api/all-prompts', async (req, res) => {
-            const result = await promptCollections.find().toArray();
-            res.json(result);
-        });
+app.get('/api/bookmark/:id', async (req, res) => {
+    const id = req.params.id;
+    const userEmail = req.query.userEmail;
 
-        app.get('/api/featured-prompts', async (req, res) => {
-            const result = await promptCollections
-                .find({ featured: true })
-                .limit(6)
-                .toArray();
-            res.json(result);
-        });
+    if (!userEmail) {
+        return res.json(null);
+    }
 
-        // bookmark related APIs
+    const result = await bookmarkCollections.findOne({
+        promptId: new ObjectId(id),
+        userEmail: userEmail,
+    });
+    res.json(result);
+});
 
-        app.post('/api/bookmarks', async (req, res) => {
-            const { userEmail, promptId } = req.body;
+app.get('/api/bookmarks/:userEmail', async (req, res) => {
+    const { userEmail } = req.params;
 
-            if (!userEmail || !promptId) {
-                return res.status(400).json({ error: "Missing identity or prompt tokens" });
-            }
+    if (!userEmail) {
+        return res.json(null);
+    }
 
-            // Setup the criteria object
-            const criteria = {
-                userEmail: userEmail,
-                promptId: new ObjectId(promptId)
-            };
+    const result = await bookmarkCollections.find({ userEmail }).toArray();
+    res.json(result);
+});
 
-            // Check if this bookmark already exists in your collection
-            const existingBookmark = await bookmarkCollections.findOne(criteria);
+app.delete('/api/bookmark/:bookmarkId', async (req, res) => {
+    const { bookmarkId } = req.params;
 
-            if (existingBookmark) {
-                await bookmarkCollections.deleteOne({ _id: existingBookmark._id });
+    const result = await bookmarkCollections.deleteOne({
+        _id: new ObjectId(bookmarkId)
+    });
 
-                // decrease bookmark count in prompt
-                await promptCollections.updateOne(
-                    { _id: new ObjectId(promptId) },
-                    { $inc: { bookmarkCount: -1 } }
-                )
+    res.json(result);
+});
 
-                return res.json({ bookmarked: false, message: "Removed from collection" });
-            }
-            else {
-                await bookmarkCollections.insertOne({
-                    ...criteria,
-                    createdAt: new Date()
-                });
+// copy count related APIs
 
-                // increase bookmark count
-                await promptCollections.updateOne(
-                    { _id: new ObjectId(promptId) },
-                    { $inc: { bookmarkCount: 1 } }
-                );
+app.patch('/api/prompts/increment-copy', async (req, res) => {
+    const { promptId } = req.body;
 
-                return res.json({ bookmarked: true, message: "Saved to your dashboard!" });
-            }
-        });
+    if (!promptId) {
+        return res.status(400).json({ error: 'Missing required prompt identity token' });
+    }
 
-        app.get('/api/bookmark/:id', async (req, res) => {
-            const id = req.params.id;
-            const userEmail = req.query.userEmail;
+    const filter = { _id: new ObjectId(promptId) };
+    const updateDoc = {
+        $inc: { copyCount: 1 }
+    };
 
-            if (!userEmail) {
-                return res.json(null);
-            }
+    const result = await promptCollections.updateOne(filter, updateDoc);
+    if (result.matchedCount === 0) {
+        return res.status(404).json({ error: "Prompt document not found" });
+    }
 
-            const result = await bookmarkCollections.findOne({
-                promptId: new ObjectId(id),
-                userEmail: userEmail,
+    res.json(result);
+});
+
+// reports related APIs
+
+app.post('/api/report', async (req, res) => {
+    const { userEmail, promptId, reason, description } = req.body;
+
+    const criteria = {
+        userEmail: userEmail,
+        promptId: new ObjectId(promptId),
+        reason: reason,
+        description: description,
+    };
+
+    const result = await reportsCollection.insertOne({
+        ...criteria,
+        createdAt: new Date()
+    });
+    res.json(result);
+});
+
+app.get('/api/get-all-reports', async (req, res) => {
+    const result = await reportsCollection.find().toArray();
+    res.json(result);
+});
+
+app.patch('/api/warn-reported-prompt', async (req, res) => {
+    try {
+        const { reportId, promptId } = req.body;
+
+        if (!reportId || !promptId) {
+            return res.status(400).json({
+                message: 'reportId and promptId are required'
             });
-            res.json(result);
-        });
+        }
 
-        app.get('/api/bookmarks/:userEmail', async (req, res) => {
-            const { userEmail } = req.params;
-
-            if (!userEmail) {
-                return res.json(null);
-            }
-
-            const result = await bookmarkCollections.find({ userEmail }).toArray();
-            res.json(result);
-        });
-
-        app.delete('/api/bookmark/:bookmarkId', async (req, res) => {
-            const { bookmarkId } = req.params;
-
-            const result = await bookmarkCollections.deleteOne({
-                _id: new ObjectId(bookmarkId)
-            });
-
-            res.json(result);
-        });
-
-        // copy count related APIs
-
-        app.patch('/api/prompts/increment-copy', async (req, res) => {
-            const { promptId } = req.body;
-
-            if (!promptId) {
-                return res.status(400).json({ error: 'Missing required prompt identity token' });
-            }
-
-            const filter = { _id: new ObjectId(promptId) };
-            const updateDoc = {
-                $inc: { copyCount: 1 }
-            };
-
-            const result = await promptCollections.updateOne(filter, updateDoc);
-            if (result.matchedCount === 0) {
-                return res.status(404).json({ error: "Prompt document not found" });
-            }
-
-            res.json(result);
-        });
-
-        // reports related APIs
-
-        app.post('/api/report', async (req, res) => {
-            const { userEmail, promptId, reason, description } = req.body;
-
-            const criteria = {
-                userEmail: userEmail,
-                promptId: new ObjectId(promptId),
-                reason: reason,
-                description: description,
-            };
-
-            const result = await reportsCollection.insertOne({
-                ...criteria,
-                createdAt: new Date()
-            });
-            res.json(result);
-        });
-
-        app.get('/api/get-all-reports', async (req, res) => {
-            const result = await reportsCollection.find().toArray();
-            res.json(result);
-        });
-
-        app.patch('/api/warn-reported-prompt', async (req, res) => {
-            try {
-                const { reportId, promptId } = req.body;
-
-                if (!reportId || !promptId) {
-                    return res.status(400).json({
-                        message: 'reportId and promptId are required'
-                    });
-                }
-
-                const [promptResult, reportResult] = await Promise.all([
-                    promptCollections.updateOne(
-                        { _id: new ObjectId(promptId) },
-                        { $set: { adminReportFeedback: 'warning' } }
-                    ),
-                    reportsCollection.updateOne(
-                        { _id: new ObjectId(reportId) },
-                        { $set: { adminReportFeedback: 'warning' } }
-                    )
-                ]);
-
-                res.json({
-                    success: true,
-                });
-            } catch (error) {
-                res.status(500).json({
-                    success: false,
-                    message: error.message
-                });
-            }
-        });
-
-        app.delete('/api/delete-report/:reportId', async (req, res) => {
-            const { reportId } = req.params;
-
-            if (!reportId) {
-                return res.status(400).json({
-                    message: 'report id is required'
-                });
-            }
-
-            const result = await reportsCollection.deleteOne({
-                _id: new ObjectId(reportId)
-            });
-
-            res.json(result);
-        });
-
-        app.patch('/api/dismiss-report', async (req, res) => {
-            try {
-                const { reportId, promptId } = req.body;
-
-                if (!reportId || !promptId) {
-                    return res.status(400).json({
-                        message: 'reportId and promptId are required'
-                    });
-                }
-
-                const [promptResult, reportResult] = await Promise.all([
-                    promptCollections.updateOne(
-                        { _id: new ObjectId(promptId) },
-                        { $set: { adminReportFeedback: 'dismiss' } }
-                    ),
-                    reportsCollection.updateOne(
-                        { _id: new ObjectId(reportId) },
-                        { $set: { adminReportFeedback: 'dismiss' } }
-                    )
-                ]);
-
-                res.json({
-                    success: true,
-                });
-            } catch (error) {
-                res.status(500).json({
-                    success: false,
-                    message: error.message
-                });
-            }
-        });
-
-        // review related APIs
-
-        app.post('/api/review', async (req, res) => {
-            const { name, email, rating, comment, promptId } = req.body;
-
-            const criteria = {
-                email,
-                promptId: new ObjectId(promptId),
-                rating,
-                comment,
-            }
-
-            const result = await reviewsCollections.insertOne({
-                ...criteria,
-                createdAt: new Date()
-            });
-            res.json(result);
-        });
-
-        app.get('/api/review', async (req, res) => {
-            const { promptId } = req.query;
-
-            let query = {};
-            if (promptId) {
-                query.promptId = new ObjectId(promptId);
-            }
-
-            const result = await reviewsCollections.find(query).toArray();
-            res.json(result);
-        });
-
-        app.get('/api/reviews/:userEmail', async (req, res) => {
-            const { userEmail } = req.params;
-
-            const result = await reviewsCollections.find({ email: userEmail }).toArray();
-            res.json(result);
-        });
-
-        app.get('/api/get-all-reviews', async (req, res) => {
-            const result = await reviewsCollections.find().toArray();
-            res.json(result);
-        });
-
-        // subscription related APIs
-
-        app.post('/api/subscription', async (req, res) => {
-            const data = req.body;
-            const subsInfo = {
-                ...data,
-                createdAt: new Date()
-            }
-            const result = await subscriptionsCollection.insertOne(subsInfo);
-
-            // update the user plan info
-            const updateResult = await usersCollection.updateOne(
-                { email: data.email },
-                { $set: { plan: 'premium' } }
+        const [promptResult, reportResult] = await Promise.all([
+            promptCollections.updateOne(
+                { _id: new ObjectId(promptId) },
+                { $set: { adminReportFeedback: 'warning' } }
+            ),
+            reportsCollection.updateOne(
+                { _id: new ObjectId(reportId) },
+                { $set: { adminReportFeedback: 'warning' } }
             )
-            res.json(updateResult);
+        ]);
+
+        res.json({
+            success: true,
         });
-
-        app.get('/api/all-subscriptions', async (req, res) => {
-            const result = await subscriptionsCollection.find().toArray();
-            res.json(result);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
         });
+    }
+});
 
-        // dashboard related APIS
-        // user add prompt API
+app.delete('/api/delete-report/:reportId', async (req, res) => {
+    const { reportId } = req.params;
 
-        app.post('/api/user-add-prompt', async (req, res) => {
-            const promptData = req.body;
-
-            const promptInfo = {
-                ...promptData,
-                createdAt: new Date()
-            }
-
-            const result = await userAddPromptsCollection.insertOne(promptData);
-            res.json(result);
+    if (!reportId) {
+        return res.status(400).json({
+            message: 'report id is required'
         });
+    }
 
-        app.get('/api/user-add-prompts', async (req, res) => {
-            const { userEmail } = req.query;
+    const result = await reportsCollection.deleteOne({
+        _id: new ObjectId(reportId)
+    });
 
-            const query = {};
+    res.json(result);
+});
 
-            if (userEmail) {
-                query.userEmail = userEmail;
-            }
+app.patch('/api/dismiss-report', async (req, res) => {
+    try {
+        const { reportId, promptId } = req.body;
 
-            const result = await userAddPromptsCollection.find(query).toArray();
-            res.json(result);
-        });
+        if (!reportId || !promptId) {
+            return res.status(400).json({
+                message: 'reportId and promptId are required'
+            });
+        }
 
-        app.get('/api/user-all-add-prompts', async (req, res) => {
-            const result = await userAddPromptsCollection.find().toArray();
-            res.json(result);
-        });
-
-        // user added prompts APIs
-
-        app.patch('/api/user-edit-modal/:promptId', async (req, res) => {
-            const { promptId } = req.params;
-            const updateUserEditModal = req.body;
-
-            const result = await userAddPromptsCollection.updateOne(
+        const [promptResult, reportResult] = await Promise.all([
+            promptCollections.updateOne(
                 { _id: new ObjectId(promptId) },
-                { $set: updateUserEditModal }
-            );
-            res.json(result);
+                { $set: { adminReportFeedback: 'dismiss' } }
+            ),
+            reportsCollection.updateOne(
+                { _id: new ObjectId(reportId) },
+                { $set: { adminReportFeedback: 'dismiss' } }
+            )
+        ]);
+
+        res.json({
+            success: true,
         });
-
-        app.delete('/api/user-modal-delete/:promptId', async (req, res) => {
-            const { promptId } = req.params;
-
-            const result = await userAddPromptsCollection.deleteOne({
-                _id: new ObjectId(promptId),
-            });
-
-            res.json(result);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
         });
+    }
+});
 
-        app.patch('/api/update-user-add-prompt', async (req, res) => {
-            const { promptId } = req.body;
+// review related APIs
 
-            if (!promptId) {
-                return res.status(400).json({
-                    message: 'Prompt ID is required'
-                });
-            }
+app.post('/api/review', async (req, res) => {
+    const { name, email, rating, comment, promptId } = req.body;
 
-            // Find the user-submitted prompt
-            const prompt = await userAddPromptsCollection.findOne({
-                _id: new ObjectId(promptId)
-            });
+    const criteria = {
+        email,
+        promptId: new ObjectId(promptId),
+        rating,
+        comment,
+    }
 
-            if (!prompt) {
-                return res.status(404).json({
-                    message: 'Prompt not found'
-                });
-            }
+    const result = await reviewsCollections.insertOne({
+        ...criteria,
+        createdAt: new Date()
+    });
+    res.json(result);
+});
 
-            // Remove old _id before inserting into another collection
-            const { _id, ...promptData } = prompt;
+app.get('/api/review', async (req, res) => {
+    const { promptId } = req.query;
 
-            // Add fields needed by prompts collection
-            const insertResult = await promptCollections.insertOne({
-                ...promptData,
-                sourcePromptId: prompt._id,
+    let query = {};
+    if (promptId) {
+        query.promptId = new ObjectId(promptId);
+    }
+
+    const result = await reviewsCollections.find(query).toArray();
+    res.json(result);
+});
+
+app.get('/api/reviews/:userEmail', async (req, res) => {
+    const { userEmail } = req.params;
+
+    const result = await reviewsCollections.find({ email: userEmail }).toArray();
+    res.json(result);
+});
+
+app.get('/api/get-all-reviews', async (req, res) => {
+    const result = await reviewsCollections.find().toArray();
+    res.json(result);
+});
+
+// subscription related APIs
+
+app.post('/api/subscription', async (req, res) => {
+    const data = req.body;
+    const subsInfo = {
+        ...data,
+        createdAt: new Date()
+    }
+    const result = await subscriptionsCollection.insertOne(subsInfo);
+
+    // update the user plan info
+    const updateResult = await usersCollection.updateOne(
+        { email: data.email },
+        { $set: { plan: 'premium' } }
+    )
+    res.json(updateResult);
+});
+
+app.get('/api/all-subscriptions', async (req, res) => {
+    const result = await subscriptionsCollection.find().toArray();
+    res.json(result);
+});
+
+// dashboard related APIS
+// user add prompt API
+
+app.post('/api/user-add-prompt', async (req, res) => {
+    const promptData = req.body;
+
+    const promptInfo = {
+        ...promptData,
+        createdAt: new Date()
+    }
+
+    const result = await userAddPromptsCollection.insertOne(promptData);
+    res.json(result);
+});
+
+app.get('/api/user-add-prompts', async (req, res) => {
+    const { userEmail } = req.query;
+
+    const query = {};
+
+    if (userEmail) {
+        query.userEmail = userEmail;
+    }
+
+    const result = await userAddPromptsCollection.find(query).toArray();
+    res.json(result);
+});
+
+app.get('/api/user-all-add-prompts', async (req, res) => {
+    const result = await userAddPromptsCollection.find().toArray();
+    res.json(result);
+});
+
+// user added prompts APIs
+
+app.patch('/api/user-edit-modal/:promptId', async (req, res) => {
+    const { promptId } = req.params;
+    const updateUserEditModal = req.body;
+
+    const result = await userAddPromptsCollection.updateOne(
+        { _id: new ObjectId(promptId) },
+        { $set: updateUserEditModal }
+    );
+    res.json(result);
+});
+
+app.delete('/api/user-modal-delete/:promptId', async (req, res) => {
+    const { promptId } = req.params;
+
+    const result = await userAddPromptsCollection.deleteOne({
+        _id: new ObjectId(promptId),
+    });
+
+    res.json(result);
+});
+
+app.patch('/api/update-user-add-prompt', async (req, res) => {
+    const { promptId } = req.body;
+
+    if (!promptId) {
+        return res.status(400).json({
+            message: 'Prompt ID is required'
+        });
+    }
+
+    // Find the user-submitted prompt
+    const prompt = await userAddPromptsCollection.findOne({
+        _id: new ObjectId(promptId)
+    });
+
+    if (!prompt) {
+        return res.status(404).json({
+            message: 'Prompt not found'
+        });
+    }
+
+    // Remove old _id before inserting into another collection
+    const { _id, ...promptData } = prompt;
+
+    // Add fields needed by prompts collection
+    const insertResult = await promptCollections.insertOne({
+        ...promptData,
+        sourcePromptId: prompt._id,
+        status: 'approved',
+        copyCount: 0,
+        bookmarkCount: 0,
+        approvedAt: new Date()
+    });
+
+    // Update status and save the published prompt id
+    await userAddPromptsCollection.updateOne(
+        { _id: new ObjectId(promptId) },
+        {
+            $set: {
                 status: 'approved',
-                copyCount: 0,
-                bookmarkCount: 0,
-                approvedAt: new Date()
-            });
+                publishedPromptId: insertResult.insertedId,
+            }
+        }
+    );
 
-            // Update status and save the published prompt id
-            await userAddPromptsCollection.updateOne(
-                { _id: new ObjectId(promptId) },
-                {
-                    $set: {
-                        status: 'approved',
-                        publishedPromptId: insertResult.insertedId,
-                    }
-                }
-            );
+    res.json({
+        success: true,
+        insertedId: insertResult.insertedId
+    });
+});
 
-            res.json({
-                success: true,
-                insertedId: insertResult.insertedId
+app.patch('/api/user-add-prompt-rejection-status', async (req, res) => {
+    const { promptId, feedbackRemarks } = req.body;
+
+    if (!promptId || !feedbackRemarks) {
+        return res.status(400).json({
+            message: 'Prompt ID and feedbackRemarks is required'
+        });
+    }
+
+    const prompt = await userAddPromptsCollection.findOne({
+        _id: new ObjectId(promptId)
+    });
+
+    if (!prompt) {
+        return res.status(404).json({
+            message: 'Prompt not found'
+        });
+    }
+
+    // Update status
+    await userAddPromptsCollection.updateOne(
+        { _id: new ObjectId(promptId) },
+        {
+            $set: {
+                status: 'rejected',
+                rejectionFeedback: feedbackRemarks
+            }
+        }
+    );
+
+    // Delete published prompt if it exists
+    if (prompt.publishedPromptId) {
+        await promptCollections.deleteOne({
+            _id: new ObjectId(prompt.publishedPromptId)
+        });
+    }
+
+    res.json({
+        success: true,
+        message: 'Prompt rejected successfully'
+    });
+});
+
+app.patch('/api/user-add-prompt-feature', async (req, res) => {
+    try {
+        const { promptId } = req.body;
+
+        if (!promptId) {
+            return res.status(400).json({
+                message: 'promptId is required'
             });
+        }
+
+        const prompt = await userAddPromptsCollection.findOne({
+            _id: new ObjectId(promptId)
         });
 
-        app.patch('/api/user-add-prompt-rejection-status', async (req, res) => {
-            const { promptId, feedbackRemarks } = req.body;
-
-            if (!promptId || !feedbackRemarks) {
-                return res.status(400).json({
-                    message: 'Prompt ID and feedbackRemarks is required'
-                });
-            }
-
-            const prompt = await userAddPromptsCollection.findOne({
-                _id: new ObjectId(promptId)
+        if (!prompt) {
+            return res.status(404).json({
+                message: 'Prompt not found'
             });
+        }
 
-            if (!prompt) {
-                return res.status(404).json({
-                    message: 'Prompt not found'
-                });
-            }
+        const newFeatureValue = !prompt.feature;
 
-            // Update status
-            await userAddPromptsCollection.updateOne(
-                { _id: new ObjectId(promptId) },
-                {
-                    $set: {
-                        status: 'rejected',
-                        rejectionFeedback: feedbackRemarks
-                    }
-                }
-            );
-
-            // Delete published prompt if it exists
-            if (prompt.publishedPromptId) {
-                await promptCollections.deleteOne({
-                    _id: new ObjectId(prompt.publishedPromptId)
-                });
-            }
-
-            res.json({
-                success: true,
-                message: 'Prompt rejected successfully'
-            });
-        });
-
-        app.patch('/api/user-add-prompt-feature', async (req, res) => {
-            try {
-                const { promptId } = req.body;
-
-                if (!promptId) {
-                    return res.status(400).json({
-                        message: 'promptId is required'
-                    });
-                }
-
-                const prompt = await userAddPromptsCollection.findOne({
-                    _id: new ObjectId(promptId)
-                });
-
-                if (!prompt) {
-                    return res.status(404).json({
-                        message: 'Prompt not found'
-                    });
-                }
-
-                const newFeatureValue = !prompt.feature;
-
-                const result = await userAddPromptsCollection.updateOne(
-                    { _id: new ObjectId(promptId) },
-                    {
-                        $set: {
-                            feature: newFeatureValue
-                        }
-                    }
-                );
-
-                res.json({
-                    ...result,
+        const result = await userAddPromptsCollection.updateOne(
+            { _id: new ObjectId(promptId) },
+            {
+                $set: {
                     feature: newFeatureValue
-                });
-
-            } catch (error) {
-                res.status(500).json({
-                    message: error.message
-                });
+                }
             }
+        );
+
+        res.json({
+            ...result,
+            feature: newFeatureValue
         });
 
-        app.delete('/api/delete-user-add-prompt/:promptId', async (req, res) => {
-            const { promptId } = req.params;
-
-            if (!promptId) {
-                return res.status(400).json({
-                    message: 'promptId not found'
-                });
-            }
-
-            const result = await userAddPromptsCollection.deleteOne(
-                { _id: new ObjectId(promptId) }
-            );
-
-            res.json(result);
+    } catch (error) {
+        res.status(500).json({
+            message: error.message
         });
-
-        // users related APIs
-
-        app.get('/api/users', async (req, res) => {
-            const result = await usersCollection.find().toArray();
-            res.json(result);
-        });
-
-        app.patch('/api/admin/user', async (req, res) => {
-            const { userId, newRole } = req.body;
-
-            if (!userId || !newRole) {
-                return res.status(400).json({
-                    error: 'userId and newRole are required'
-                });
-            }
-
-            const result = await usersCollection.updateOne(
-                { _id: new ObjectId(userId) },
-                { $set: { role: newRole } }
-            );
-
-            res.json(result);
-        });
-
-        app.delete('/api/user/delete/:userId', async (req, res) => {
-            const { userId } = req.params;
-
-            const result = await usersCollection.deleteOne({
-                _id: new ObjectId(userId)
-            });
-
-            res.json(result);
-        });
-
-        // await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
-    finally {
-        // await client.close();
+});
+
+app.delete('/api/delete-user-add-prompt/:promptId', async (req, res) => {
+    const { promptId } = req.params;
+
+    if (!promptId) {
+        return res.status(400).json({
+            message: 'promptId not found'
+        });
     }
-}
-run().catch(console.dir);
+
+    const result = await userAddPromptsCollection.deleteOne(
+        { _id: new ObjectId(promptId) }
+    );
+
+    res.json(result);
+});
+
+// users related APIs
+
+app.get('/api/users', async (req, res) => {
+    const result = await usersCollection.find().toArray();
+    res.json(result);
+});
+
+app.patch('/api/admin/user', async (req, res) => {
+    const { userId, newRole } = req.body;
+
+    if (!userId || !newRole) {
+        return res.status(400).json({
+            error: 'userId and newRole are required'
+        });
+    }
+
+    const result = await usersCollection.updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { role: newRole } }
+    );
+
+    res.json(result);
+});
+
+app.delete('/api/user/delete/:userId', async (req, res) => {
+    const { userId } = req.params;
+
+    const result = await usersCollection.deleteOne({
+        _id: new ObjectId(userId)
+    });
+
+    res.json(result);
+});
+
+// await client.db("admin").command({ ping: 1 });
+//         console.log("Pinged your deployment. You successfully connected to MongoDB!");
+//     }
+//     finally {
+//         // await client.close();
+//     }
+// }
+// run().catch(console.dir);
 
 
 app.get('/', (req, res) => {
@@ -646,3 +650,5 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
 });
+
+module.exports = app;
