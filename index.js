@@ -329,20 +329,37 @@ app.patch('/api/warn-reported-prompt', async (req, res) => {
     }
 });
 
-app.delete('/api/delete-report/:reportId', async (req, res) => {
-    const { reportId } = req.params;
+app.delete('/api/delete-reported-prompt/:reportedPromptId/:reportedId', async (req, res) => {
+    const { reportedPromptId, reportedId } = req.params;
+    console.log(reportedPromptId, reportedId, 'reportedPromptId');
 
-    if (!reportId) {
+    if (!reportedPromptId || !reportedId) {
         return res.status(400).json({
-            message: 'report id is required'
+            message: 'Reported prompt id is required'
         });
     }
 
-    const result = await reportsCollection.deleteOne({
-        _id: new ObjectId(reportId)
-    });
+    try {
+        const promptQuery = {
+            _id: new ObjectId(reportedPromptId)
+        };
 
-    res.json(result);
+        const reportQuery = {
+            _id: new ObjectId(reportedId)
+        }
+
+        const reportResult = await reportsCollection.deleteOne(reportQuery)
+        const reportedPromptResult = await promptCollections.deleteOne(promptQuery);
+
+        res.json({
+            reportResult,
+            reportedPromptResult,
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: error.message
+        });
+    }
 });
 
 app.patch('/api/dismiss-report', async (req, res) => {
