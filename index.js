@@ -3,7 +3,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 
 const port = process.env.PORT;
 const uri = process.env.MONGODB_URI;
@@ -21,9 +21,6 @@ const client = new MongoClient(uri, {
     }
 });
 
-// async function run() {
-//     try {
-//         await client.connect();
 
 client.connect(() => {
     console.log('Connecting to MongoDB');
@@ -36,9 +33,58 @@ const reportsCollection = db.collection('reports');
 const reviewsCollections = db.collection('reviews');
 const subscriptionsCollection = db.collection('subscriptions');
 const usersCollection = db.collection('user');
+const sessionCollection = db.collection('session');
 
 // dashboard collection
 const userAddPromptsCollection = db.collection('user-add-prompts');
+
+// verification related API
+
+const JWKS = createRemoteJWKSet(
+    new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+);
+
+const verifyToken = async (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return res.status(401).json({ message: "Unauthorized Access" });
+        }
+
+        const token = authHeader.split(" ")[1];
+        console.log(token, 'token');
+
+        // Verify JWT
+        const { payload } = await jwtVerify(token, JWKS);
+        console.log(payload, 'payload');
+
+        // payload.sub should contain the user id
+        const userId = payload.sub;
+
+        // Find user
+        const user = await usersCollection.findOne({
+            _id: new ObjectId(userId),
+        });
+        console.log(user, 'user');
+
+        if (!user) {
+            return res.status(401).json({ message: "User not found" });
+        }
+
+        // Store both JWT payload and DB user if you want
+        req.user = user;
+        req.jwt = payload;
+
+        next();
+    } catch (error) {
+        console.error(error);
+
+        return res.status(401).json({
+            message: "Unauthorized Access",
+        });
+    }
+};
 
 // all-prompts related APIs
 
@@ -182,7 +228,10 @@ app.get('/api/bookmarks/:userEmail', async (req, res) => {
     const { userEmail } = req.params;
 
     if (!userEmail) {
-        return res.json(null);
+        return res.json({
+            success: false,
+            message: "userEmail is missing"
+        });
     }
 
     const result = await bookmarkCollections.find({ userEmail }).toArray();
@@ -632,15 +681,6 @@ app.delete('/api/user/delete/:userId', async (req, res) => {
 
     res.json(result);
 });
-
-// await client.db("admin").command({ ping: 1 });
-//         console.log("Pinged your deployment. You successfully connected to MongoDB!");
-//     }
-//     finally {
-//         // await client.close();
-//     }
-// }
-// run().catch(console.dir);
 
 
 app.get('/', (req, res) => {
