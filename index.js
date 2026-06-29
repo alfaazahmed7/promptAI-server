@@ -138,11 +138,14 @@ app.get('/api/prompts', async (req, res) => {
 
 app.get('/api/prompts/:id', async (req, res) => {
     const id = req.params.id;
-    const query = {
-        _id: new ObjectId(id)
-    }
-    const result = await promptCollections.findOne(query);
-    res.json(result);
+
+    const result = await promptCollections.aggregate([{
+        $match: {
+            _id: new ObjectId(id)
+        }
+    }]).toArray();
+
+    res.json(result[0]);
 });
 
 app.get('/api/prompts/user/:userEmail', async (req, res) => {
